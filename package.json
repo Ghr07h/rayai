@@ -1,0 +1,58 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "rayai",
+  "title": "RayAI",
+  "description": "Use any OpenAI-compatible inference service from Raycast",
+  "icon": "icon.png",
+  "author": "Ghr07h",
+  "license": "AGPL-3.0-only",
+  "platforms": [
+    "macOS",
+    "Windows"
+  ],
+  "categories": [
+    "Productivity",
+    "Developer Tools"
+  ],
+  "commands": [
+    {
+      "name": "ask",
+      "title": "AI 推理对话",
+      "subtitle": "RayAI",
+      "description": "向配置的模型提问、连续对话并查看 Markdown 回答",
+      "mode": "view"
+    },
+    {
+      "name": "history",
+      "title": "AI 对话历史",
+      "subtitle": "RayAI",
+      "description": "查看并恢复过去的 AI 对话",
+      "mode": "view"
+    },
+    {
+      "name": "settings",
+      "title": "AI 推理配置",
+      "subtitle": "RayAI",
+      "description": "配置推理服务、模型列表、请求参数和上下文",
+      "mode": "view"
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^2.4.1"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "^2.2.0",
+    "@types/node": "22.19.17",
+    "@types/react": "19.0.10",
+    "eslint": "^9.39.1",
+    "prettier": "^3.7.3",
+    "react": "19.0.0",
+    "typescript": "^5.9.3"
+  },
+  "scripts": {
+    "build": "ray build -e dist",
+    "dev": "ray develop",
+    "fix-lint": "ray lint --fix",
+    "lint": "ray lint"
+  }
+}
