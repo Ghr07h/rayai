@@ -15,7 +15,11 @@ import { ImageAttachmentForm } from "./components/ImageAttachmentForm";
 import { ModelDropdown } from "./components/ModelDropdown";
 import { SettingsRequired } from "./components/SettingsRequired";
 import { type LiveAnswerStore, useChatSession } from "./hooks/useChatSession";
-import { markdownToPlainText, unwrapMarkdownFence } from "./lib/markdown";
+import {
+  formatAssistantMarkdown,
+  markdownToPlainText,
+  unwrapMarkdownFence,
+} from "./lib/markdown";
 import { getSelectedModel, isConfigured } from "./lib/settings";
 import type { ChatMessage } from "./types";
 
@@ -122,7 +126,7 @@ export default function AskCommand(props: LaunchProps) {
           <Action.Push
             title="查看完整回答"
             icon={Icon.Eye}
-            target={<AnswerDetail content={message.content} />}
+            target={<AnswerDetail content={rendered} />}
           />
         ) : message ? (
           <Action.CopyToClipboard title="复制消息" content={message.content} />
@@ -136,7 +140,7 @@ export default function AskCommand(props: LaunchProps) {
         {message?.role === "assistant" ? (
           <Action.CopyToClipboard
             title="复制 Markdown 原文"
-            content={message.content}
+            content={rendered}
           />
         ) : null}
         {!session.isStreaming ? (
@@ -301,7 +305,9 @@ function LiveAnswerDetail({
 
 function renderedContent(message: ChatMessage): string {
   return message.role === "assistant"
-    ? unwrapMarkdownFence(message.content)
+    ? unwrapMarkdownFence(
+        formatAssistantMarkdown(message.reasoning ?? "", message.content),
+      )
     : message.content;
 }
 

@@ -37,6 +37,54 @@ export function unwrapMarkdownFence(markdown: string): string {
   return content;
 }
 
+export function formatAssistantMarkdown(
+  reasoning: string,
+  content: string,
+): string {
+  const normalized = normalizeAssistantResponse(reasoning, content);
+  if (!normalized.reasoning) return normalized.content;
+  const answer = unwrapMarkdownFence(normalized.content);
+
+  const quote = normalized.reasoning
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => `> ${line}`)
+    .join("\n");
+  return answer ? `${quote}\n\n${answer}` : quote;
+}
+
+export function normalizeAssistantResponse(
+  reasoning: string,
+  content: string,
+): { reasoning: string; content: string } {
+  const embedded = extractLeadingThinkBlock(content);
+  const combinedReasoning = [reasoning, embedded.reasoning]
+    .filter(Boolean)
+    .join("\n")
+    .replace(/^(?:\r?\n)+|(?:\r?\n)+$/g, "");
+  return { reasoning: combinedReasoning, content: embedded.content };
+}
+
+function extractLeadingThinkBlock(content: string): {
+  reasoning: string;
+  content: string;
+} {
+  const opening = content.match(/^\s*<think>/i);
+  if (!opening) return { reasoning: "", content };
+
+  const afterOpening = content.slice(opening[0].length);
+  const closing = /<\/think>/i.exec(afterOpening);
+  if (!closing) return { reasoning: afterOpening, content: "" };
+
+  const answer = afterOpening
+    .slice(closing.index + closing[0].length)
+    .replace(/^\r?\n/, "");
+  return {
+    reasoning: afterOpening.slice(0, closing.index),
+    content: answer,
+  };
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

@@ -6,6 +6,10 @@ import {
   saveContext,
   updateContextModelOverride,
 } from "../lib/context";
+import {
+  formatAssistantMarkdown,
+  normalizeAssistantResponse,
+} from "../lib/markdown";
 import { streamChat } from "../lib/openai";
 import { getSelectedModel, loadSettings } from "../lib/settings";
 import type {
@@ -159,6 +163,9 @@ export function useChatSession(kind: ContextKind) {
 
       let currentMessages = [...baseMessages, userMessage, assistantMessage];
       let assistantContent = "";
+      let assistantReasoning = "";
+      let answerContent = "";
+      let reasoningContent = "";
       let renderTimer: ReturnType<typeof setTimeout> | undefined;
       const persist = async () => {
         const savedContext = await saveContext(kind, currentMessages, {
@@ -173,14 +180,27 @@ export function useChatSession(kind: ContextKind) {
       const flushRender = () => {
         if (renderTimer) clearTimeout(renderTimer);
         renderTimer = undefined;
+        const normalized = normalizeAssistantResponse(
+          reasoningContent,
+          answerContent,
+        );
+        assistantContent = normalized.content;
+        assistantReasoning = normalized.reasoning;
         currentMessages = currentMessages.map((message) =>
           message.id === assistantMessage.id
-            ? { ...message, content: assistantContent }
+            ? {
+                ...message,
+                content: assistantContent,
+                reasoning: assistantReasoning || undefined,
+              }
             : message,
         );
         replaceMessages(currentMessages);
         liveAnswerStore.update({
-          content: assistantContent,
+          content: formatAssistantMarkdown(
+            assistantReasoning,
+            assistantContent,
+          ),
           isStreaming: true,
         });
       };
@@ -192,8 +212,9 @@ export function useChatSession(kind: ContextKind) {
           settings: sessionSettings,
           messages: [...baseMessages, userMessage],
           signal: controller.signal,
-          onDelta: (chunk) => {
-            assistantContent += chunk;
+          onDelta: (delta) => {
+            answerContent += delta.content ?? "";
+            reasoningContent += delta.reasoning ?? "";
             if (!renderTimer) renderTimer = setTimeout(flushRender, 150);
           },
         });
@@ -204,7 +225,8 @@ export function useChatSession(kind: ContextKind) {
         const aborted = error instanceof Error && error.name === "AbortError";
         const hasPartialAnswer = currentMessages.some(
           (message) =>
-            message.id === assistantMessage.id && Boolean(message.content),
+            message.id === assistantMessage.id &&
+            Boolean(message.content || message.reasoning),
         );
         if (!hasPartialAnswer) {
           currentMessages = currentMessages.filter(
@@ -227,7 +249,10 @@ export function useChatSession(kind: ContextKind) {
         abortController.current = undefined;
         setIsStreaming(false);
         liveAnswerStore.update({
-          content: assistantContent,
+          content: formatAssistantMarkdown(
+            assistantReasoning,
+            assistantContent,
+          ),
           isStreaming: false,
         });
       }

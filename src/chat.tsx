@@ -12,7 +12,11 @@ import { ImageAttachmentForm } from "./components/ImageAttachmentForm";
 import { ModelDropdown } from "./components/ModelDropdown";
 import { SettingsRequired } from "./components/SettingsRequired";
 import { useChatSession } from "./hooks/useChatSession";
-import { markdownToPlainText, unwrapMarkdownFence } from "./lib/markdown";
+import {
+  formatAssistantMarkdown,
+  markdownToPlainText,
+  unwrapMarkdownFence,
+} from "./lib/markdown";
 import { getSelectedModel, isConfigured } from "./lib/settings";
 import type { ChatMessage } from "./types";
 
@@ -85,7 +89,7 @@ export default function ChatCommand() {
       {message ? (
         <Action.CopyToClipboard
           title="复制 Markdown 原文"
-          content={message.content}
+          content={renderedContent(message)}
         />
       ) : null}
       {!session.isStreaming ? (
@@ -201,6 +205,8 @@ function summary(content: string): string {
 
 function renderedContent(message: ChatMessage): string {
   return message.role === "assistant"
-    ? unwrapMarkdownFence(message.content)
+    ? unwrapMarkdownFence(
+        formatAssistantMarkdown(message.reasoning ?? "", message.content),
+      )
     : message.content;
 }

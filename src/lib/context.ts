@@ -289,6 +289,7 @@ function isChatMessage(value: unknown): value is ChatMessage {
       value.role === "user" ||
       value.role === "assistant") &&
     typeof value.content === "string" &&
+    (value.reasoning === undefined || typeof value.reasoning === "string") &&
     typeof value.createdAt === "number"
   );
 }

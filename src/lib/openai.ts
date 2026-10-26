@@ -4,13 +4,27 @@ interface StreamChatOptions {
   settings: RayAISettings;
   messages: ChatMessage[];
   signal: AbortSignal;
-  onDelta: (chunk: string) => void;
+  onDelta: (delta: StreamChatDelta) => void;
+}
+
+export interface StreamChatDelta {
+  content?: string;
+  reasoning?: string;
+}
+
+interface ChatCompletionPayload {
+  content?: unknown;
+  reasoning_content?: unknown;
+  reasoning?: unknown;
+  reasoning_details?: unknown;
+  thinking?: unknown;
+  analysis?: unknown;
 }
 
 interface ChatCompletionChunk {
   choices?: Array<{
-    delta?: { content?: string | Array<{ text?: string }> };
-    message?: { content?: string };
+    delta?: ChatCompletionPayload;
+    message?: ChatCompletionPayload;
   }>;
   error?: { message?: string };
 }
@@ -46,8 +60,8 @@ export async function streamChat({
   const contentType = response.headers.get("content-type") ?? "";
   if (contentType.includes("application/json")) {
     const data = (await response.json()) as ChatCompletionChunk;
-    const content = data.choices?.[0]?.message?.content;
-    if (content) onDelta(content);
+    const delta = extractDelta(data.choices?.[0]?.message);
+    if (delta.content || delta.reasoning) onDelta(delta);
     else throw new Error(data.error?.message ?? "服务未返回内容");
     return;
   }
@@ -96,7 +110,10 @@ function toOpenAIMessage(message: ChatMessage) {
   return { role: message.role, content: message.content };
 }
 
-function parseSseLine(line: string, onDelta: (chunk: string) => void): boolean {
+function parseSseLine(
+  line: string,
+  onDelta: (delta: StreamChatDelta) => void,
+): boolean {
   const trimmed = line.trim();
   if (!trimmed.startsWith("data:")) return false;
 
@@ -112,11 +129,85 @@ function parseSseLine(line: string, onDelta: (chunk: string) => void): boolean {
   }
 
   if (data.error?.message) throw new Error(data.error.message);
-  const content = data.choices?.[0]?.delta?.content;
-  if (typeof content === "string") onDelta(content);
-  else if (Array.isArray(content))
-    onDelta(content.map((part) => part.text ?? "").join(""));
+  const delta = extractDelta(data.choices?.[0]?.delta);
+  if (delta.content || delta.reasoning) onDelta(delta);
   return false;
+}
+
+function extractDelta(payload?: ChatCompletionPayload): StreamChatDelta {
+  if (!payload) return {};
+
+  const content = extractContent(payload.content);
+  const reasoning =
+    firstText(
+      payload.reasoning_content,
+      payload.reasoning,
+      payload.thinking,
+      payload.analysis,
+      payload.reasoning_details,
+    ) || extractReasoningParts(payload.content);
+  return {
+    ...(content ? { content } : {}),
+    ...(reasoning ? { reasoning } : {}),
+  };
+}
+
+function extractContent(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (!Array.isArray(value)) return "";
+
+  return value
+    .map((part) => {
+      if (!isRecord(part) || isReasoningPart(part)) return "";
+      return textFromRecord(part);
+    })
+    .join("");
+}
+
+function extractReasoningParts(value: unknown): string {
+  if (!Array.isArray(value)) return "";
+  return value
+    .map((part) =>
+      isRecord(part) && isReasoningPart(part) ? textFromRecord(part) : "",
+    )
+    .join("");
+}
+
+function firstText(...values: unknown[]): string {
+  for (const value of values) {
+    const text = extractText(value);
+    if (text) return text;
+  }
+  return "";
+}
+
+function extractText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.map(extractText).join("");
+  return isRecord(value) ? textFromRecord(value) : "";
+}
+
+function textFromRecord(value: Record<string, unknown>): string {
+  for (const key of ["text", "thinking", "content", "summary"]) {
+    const candidate = value[key];
+    if (typeof candidate === "string") return candidate;
+    if (Array.isArray(candidate)) {
+      const text = extractText(candidate);
+      if (text) return text;
+    }
+  }
+  return "";
+}
+
+function isReasoningPart(value: Record<string, unknown>): boolean {
+  return (
+    typeof value.type === "string" &&
+    /(?:reasoning|thinking|analysis)/i.test(value.type)
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function extractError(body: string): string {
